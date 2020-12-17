@@ -1,8 +1,10 @@
 package com.github.hairless.plink.service.transform;
 
-import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.github.hairless.plink.common.util.JsonUtil;
 import com.github.hairless.plink.dao.mapper.JobMapper;
 import com.github.hairless.plink.model.common.FlinkConfig;
+import com.github.hairless.plink.model.dto.JobDTO;
 import com.github.hairless.plink.model.dto.JobInstanceDTO;
 import com.github.hairless.plink.model.enums.JobInstanceStatusEnum;
 import com.github.hairless.plink.model.exception.PlinkRuntimeException;
@@ -10,9 +12,17 @@ import com.github.hairless.plink.model.pojo.Job;
 import com.github.hairless.plink.model.pojo.JobInstance;
 import com.github.hairless.plink.service.FlinkClusterService;
 import com.github.hairless.plink.service.factory.FlinkClusterServiceFactory;
+import org.apache.commons.collections.CollectionUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import tk.mybatis.mapper.entity.Example;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * @author: silence
@@ -32,33 +42,57 @@ public class JobInstanceTransform implements Transform<JobInstanceDTO, JobInstan
         if (jobInstance == null) {
             return null;
         }
-        JobInstanceDTO jobInstanceDTO = new JobInstanceDTO();
-        BeanUtils.copyProperties(jobInstance, jobInstanceDTO);
-        if (jobInstanceDTO.getConfigJson() != null) {
-            jobInstanceDTO.setConfig(JSON.parseObject(jobInstanceDTO.getConfigJson(), FlinkConfig.class));
-        } else {
-            jobInstanceDTO.setConfig(new FlinkConfig());
-        }
-        //setLastStatusDesc
-        JobInstanceStatusEnum statusEnum = JobInstanceStatusEnum.getEnum(jobInstance.getStatus());
-        if (statusEnum != null) {
-            jobInstanceDTO.setStatusDesc(statusEnum.getDesc());
+        return transform(Collections.singletonList(jobInstance)).stream().findFirst().orElse(null);
+    }
+
+    @Override
+    public Collection<JobInstanceDTO> transform(Collection<JobInstance> pojoList) {
+        if (CollectionUtils.isEmpty(pojoList)) {
+            return Collections.emptyList();
         }
 
-        if (jobInstance.getAppId() != null) {
-            FlinkClusterService defaultFlinkClusterService = flinkClusterServiceFactory.getDefaultFlinkClusterService();
-            try {
-                jobInstanceDTO.setUiAddress(defaultFlinkClusterService.getJobUiAddress(jobInstance.getAppId()));
-            } catch (Exception e) {
-                throw new PlinkRuntimeException(e);
+        //根据jobId批量查询，提升性能
+        Example example = new Example(Job.class);
+        Example.Criteria criteria = example.createCriteria();
+        criteria.andIn("id", pojoList.stream().map(JobInstance::getJobId).collect(Collectors.toList()));
+        Map<Long, JobDTO> jobDTOMap = jobTransform.transform(jobMapper.selectByExample(example)).stream().collect(Collectors.toMap(JobDTO::getId, Function.identity()));
+
+        FlinkClusterService defaultFlinkClusterService = flinkClusterServiceFactory.getDefaultFlinkClusterService();
+
+        return pojoList.stream().map(jobInstance -> {
+            if (jobInstance == null) {
+                return null;
             }
-        }
+            JobInstanceDTO jobInstanceDTO = new JobInstanceDTO();
+            BeanUtils.copyProperties(jobInstance, jobInstanceDTO);
+            if (jobInstanceDTO.getFlinkConfigJson() != null) {
+                jobInstanceDTO.setFlinkConfig(JsonUtil.parseObject(jobInstanceDTO.getFlinkConfigJson(), FlinkConfig.class));
+            } else {
+                jobInstanceDTO.setFlinkConfig(new FlinkConfig());
+            }
+            if (jobInstanceDTO.getExtraConfigJson() != null) {
+                jobInstanceDTO.setExtraConfig(JsonUtil.parseObject(jobInstanceDTO.getExtraConfigJson()));
+            } else {
+                jobInstanceDTO.setExtraConfig(JsonNodeFactory.instance.objectNode());
+            }
+            //setLastStatusDesc
+            JobInstanceStatusEnum statusEnum = JobInstanceStatusEnum.getEnum(jobInstance.getStatus());
+            if (statusEnum != null) {
+                jobInstanceDTO.setStatusDesc(statusEnum.getDesc());
+            }
+            if (jobInstance.getAppId() != null) {
+                try {
+                    jobInstanceDTO.setUiAddress(defaultFlinkClusterService.getJobUiAddress(jobInstanceDTO));
+                } catch (Exception e) {
+                    throw new PlinkRuntimeException(e);
+                }
+            }
 
-        if (jobInstance.getJobId() != null) {
-            Job job = jobMapper.selectByPrimaryKey(jobInstance.getJobId());
-            jobInstanceDTO.setJob(jobTransform.transform(job));
-        }
-        return jobInstanceDTO;
+            if (jobInstance.getJobId() != null) {
+                jobInstanceDTO.setJob(jobDTOMap.get(jobInstance.getJobId()));
+            }
+            return jobInstanceDTO;
+        }).collect(Collectors.toList());
     }
 
     @Override
@@ -66,9 +100,22 @@ public class JobInstanceTransform implements Transform<JobInstanceDTO, JobInstan
         if (dto == null) {
             return null;
         }
-        if (dto.getConfig() != null) {
-            dto.setConfigJson(JSON.toJSONString(dto.getConfig()));
-        }
-        return dto;
+        return inverseTransform(Collections.singletonList(dto)).stream().findFirst().orElse(null);
+    }
+
+    @Override
+    public Collection<JobInstance> inverseTransform(Collection<JobInstanceDTO> dtoList) {
+        return dtoList.stream().map(dto -> {
+            if (dto == null) {
+                return null;
+            }
+            if (dto.getFlinkConfig() != null) {
+                dto.setFlinkConfigJson(JsonUtil.toJSONString(dto.getFlinkConfig()));
+            }
+            if (dto.getExtraConfig() != null) {
+                dto.setExtraConfigJson(JsonUtil.toJSONString(dto.getExtraConfig()));
+            }
+            return dto;
+        }).collect(Collectors.toList());
     }
 }

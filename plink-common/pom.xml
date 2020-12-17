@@ -17,11 +17,21 @@
             <groupId>com.github.hairless</groupId>
             <artifactId>plink-model</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.github.hairless</groupId>
+            <artifactId>plink-sql-model</artifactId>
+        </dependency>
 
         <!-- flink -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-core</artifactId>
+        </dependency>
+
+        <!-- hadoop -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
         </dependency>
 
         <!-- utils -->
@@ -32,6 +42,10 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-text</artifactId>
         </dependency>
 
         <!-- Junit -->

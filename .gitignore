@@ -29,3 +29,8 @@ hs_err_pid*
 *.iml
 *.ipr
 /upload*
+
+# NPM
+package-lock.json
+
+/module/

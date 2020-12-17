@@ -1,12 +1,11 @@
 package com.github.hairless.plink.model.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.github.hairless.plink.model.common.FlinkConfig;
 import com.github.hairless.plink.model.pojo.Job;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import javax.validation.Valid;
 
 /**
  * @author: silence
@@ -26,8 +25,9 @@ public class JobDTO extends Job {
 
     private String lastUiAddress;
 
-    @Valid
-    private FlinkConfig config;
+    private FlinkConfig flinkConfig;
+
+    private JsonNode extraConfig;
 
     private AuthMap authMap;
 
